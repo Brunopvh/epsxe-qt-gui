@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+'''
+Este programa está em desenvolvimento sem versão. Será desenvolvido com suporte a 
+Windows e Linux.
+'''
+
 import sys, os, subprocess
 import sys
 from PyQt5.QtWidgets import (QApplication, 
@@ -24,16 +29,19 @@ from PyQt5 import (
 '''
 
 
-__version__ = '2020-12-25'
+__version__ = '2020-12-27'
 
 dir_of_executable = os.path.dirname(os.path.realpath(__file__))
 os.chdir(dir_of_executable)
-import utils
+from lib import utils
 
 config = utils.SetUserConfig()
-path_epsxe_zip_file = os.path.abspath(os.path.join(config.dir_cache, 'ePSXe205.zip'))
-url_epsxe_win = 'http://www.epsxe.com/files/ePSXe205.zip'
-
+if utils.KERNEL_TYPE == 'Windows':
+	url_epsxe_zip = 'http://www.epsxe.com/files/ePSXe205.zip'
+	path_epsxe_zip_file = os.path.abspath(os.path.join(config.dir_cache, 'ePSXe205.zip'))
+elif utils.KERNEL_TYPE == 'Linux':
+	url_epsxe_zip = 'http://www.epsxe.com/files/ePSXe205linux.zip'
+	path_epsxe_zip_file = os.path.abspath(os.path.join(config.dir_cache, 'ePSXe205linux.zip'))
 
 class Window(QWidget):
 	'''
@@ -104,7 +112,7 @@ class Window(QWidget):
 		self.messsage_box = QMessageBox.information(self, self.title_info, self.text)
 		
 	def download_epsxe(self):
-		output = utils.downloader(url_epsxe_win, path_epsxe_zip_file)
+		output = utils.downloader(url_epsxe_zip, path_epsxe_zip_file)
 		if output == False:
 			self.text = 'Falha no download.'
 			self.title_info = 'Erro'

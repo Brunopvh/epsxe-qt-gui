@@ -9,6 +9,7 @@ import getpass
 import shutil
 import tempfile
 import urllib.request
+import subprocess
 import progressbar
 from pathlib import Path
 
@@ -42,34 +43,45 @@ def print_line():
 #=====================================================#
 
 def mkdir(path):
-		if path == '':
+	if path == '':
+		return False
+
+	if os.path.exists(path):
+		print(f'mkdir: Arquivo ou diretório já existe ... {path}')
+		if os.path.isdir(path):
+			return True
+		else:
 			return False
-		try:
-			if not os.path.exists(path):
-				print(f'Criando diretório ... {path}')
-				os.makedirs(path, 0o700)
-				return True
-		except Exception as err:
-			print(err)
-			return False
+
+	print(f'Criando diretório ... {path}', end=' ')
+	try:
+		os.makedirs(path)
+	except:
+		print('{}Erro{}'.format(CRed, CReset))
+		return False
+	else:		
 		if not os.access(path, os.W_OK):
-			print("[!] Você não tem permissão de escrita em: {0}".format(path))
+			print()
+			print("mkdir: Você não tem permissão de escrita em ... {}".format(path))
 			return False
-		return True
+
+	print('OK')
+	return True 
 
 #=====================================================#
 
 def rmdir(path):
-	if not path:
-		return
+	if os.path.exists(path) == False:
+		return False
 
+	print(f'Apagando ... {path}', end=' ')
 	try:
-		print(f'Apagando ... {path}')
 		shutil.rmtree(path)
 	except:
-		print(f'{CRed}Erro ao tentar apagar ... {path}{CReset}')
+		print(f'{CRed}Erro{CReset}')
 		return False
 	else:
+		print('OK')
 		return True
 
 #=====================================================#
@@ -95,22 +107,22 @@ def read_file(file: str) -> list:
 
 def write_file(content: list, file: str) -> bool:
 	"""
-	Recebe um arquivo seguido de uma lista, grava o contéudo da lista
-	no arquivo que será aberto em modo 'w'. 
+	Recebe uma lista seguida de um arquivo, grava o contéudo da lista
+	no arquivo que será aberto em MODO 'w'. 
 	
 	OBS: 
        - Quebras de linha são adicionadas ao fim de cada elemento da lista.
        - Se o arquivo 'file' já existir a função será encerrada.
 	"""
 	
-	print(f'Gravando dados no arquivo ... {file} ', end='')
+	print(f'write_file: gravando dados no arquivo ... {file} ', end=' ')
 	try:
-		with open(file, 'w+') as f:
+		with open(file, 'w') as f:
 			for L in content:
 				if L != '':
 					f.write(f'{L}\n')
 	except:
-		print('write_file: Erro')
+		print(f'{CRed}Erro{CReset}')
 		return False
 	else:
 		print('OK')
@@ -135,7 +147,7 @@ def string_in_file(string: str, file: str, case_sensitive=True) -> list:
 		return []
 	else:
 		if content == False:
-			print('string_in_file: Erro')
+			print(f'string_in_file: erro na leitura do arquivo ... {file}')
 			return []
 
 	ContentMath = []
@@ -144,14 +156,99 @@ def string_in_file(string: str, file: str, case_sensitive=True) -> list:
 
 	RegExp = re.compile(r'{}'.format(string))
 	for line in content:
-		NewLine = line
 		if case_sensitive == False:
 			NewLine = line.lower()
+		else:
+			NewLine = line
 
 		if (RegExp.findall(NewLine) != []):
 			ContentMath.append(NewLine)
 	return ContentMath
 			
+#=====================================================#
+
+
+class SetUserConfig:
+
+	def __init__(self):
+		self.dir_home = Path.home()
+		self.kernel_type = KERNEL_TYPE
+		if self.kernel_type == 'Linux':
+			self.dir_bin = os.path.abspath(os.path.join(self.dir_home, '.local', 'bin'))
+			self.dir_desktop_links = os.path.abspath(os.path.join(self.dir_home, '.local', 'share', 'applications'))
+			self.dir_cache = os.path.abspath(os.path.join(self.dir_home, '.cache', app_name))
+			self.dir_config = os.path.abspath(os.path.join(self.dir_home, '.config', app_name))
+			self.file_config = os.path.abspath(os.path.join(self.dir_config, f'{app_name}.conf'))
+		elif self.kernel_type == 'Windows':
+			self.dir_bin = os.path.abspath(os.path.join(self.dir_home, 'AppData', 'Local', 'Programs', app_name))
+			self.dir_desktop_links = ''
+			self.dir_cache = os.path.abspath(os.path.join(self.dir_home, 'AppData', 'LocalLow', app_name))
+			self.dir_config = os.path.abspath(os.path.join(self.dir_home, 'AppData', 'Roaming', app_name))
+			self.file_config = os.path.abspath(os.path.join(self.dir_config, f'{app_name}.conf'))	
+				
+		self.file_temp = tempfile.NamedTemporaryFile(delete=True).name
+		# self.dir_temp = tempfile.TemporaryDirectory().name
+		if self.kernel_type == 'Linux':
+			self.dir_temp = os.path.abspath(os.path.join('/tmp', f'{app_name}-{getpass.getuser()}'))
+		elif self.kernel_type == 'Windows':
+			self.dir_temp = os.path.abspath(os.path.join('C:', f'{app_name}-{getpass.getuser()}'))
+
+		self.user_info = {
+			'home': self.dir_home,
+			'cache': self.dir_cache,
+			'config': self.dir_config,
+			'bin': self.dir_bin,
+			'desktop_links': self.dir_desktop_links,
+			'dir_temp': self.dir_temp,
+		}
+
+		for key in self.user_info:
+			d = self.user_info[key]
+			if os.path.isdir(d) == False:
+				mkdir(d)
+		
+	def get_user_info(self):
+		return self.user_info
+
+	def config_bashrc(self):
+		'''
+		Configurar o arquivo .bashrc do usuário para inserir o diretório ~/.local/bin
+		na variável de ambiente $PATH. Essa configuração será abortada caso ~/.local/bin já 
+		exista em ~/.bashrc.
+		'''
+		if self.kernel_type != 'Linux':
+			print(f'{CRed}Seu sistema não é Linux.{CReset}')
+			return False
+
+		# Verificar se ~/.local/bin já está no PATH do usuário atual.
+		user_local_path = os.environ['PATH']
+		if self.dir_bin in user_local_path:
+			return True
+
+		file_bashrc = os.path.abspath(os.path.join(self.dir_home, '.bashrc'))
+		file_bashrc_backup = os.path.abspath(os.path.join(self.dir_home, f'.bashrc.pre-{app_name}'))
+		if os.path.isfile(file_bashrc_backup) == False:
+			shutil.copyfile(file_bashrc, file_bashrc_backup)
+
+		content_bashrc = string_in_file('^export PATH=', file_bashrc)
+		if (content_bashrc != []) and (self.dir_bin in content_bashrc[0]):
+			return True
+
+		content_bashrc = read_file(file_bashrc)
+		RegExp = re.compile(r'^export PATH=')
+		num = 0
+		for line in content_bashrc:
+			if (RegExp.findall(line) != []):
+				line = f'# {line}'
+				content_bashrc[num] = line
+				print(line)
+			num += 1
+				
+		NewUserPath = f'export PATH={self.dir_bin}:{user_local_path}'
+		content_bashrc.append(NewUserPath)
+		os.remove(file_bashrc)
+		write_file(content_bashrc, file_bashrc)
+
 #=====================================================#
 
 user_agents = [
@@ -208,119 +305,32 @@ def downloader(url: str, output_file: str) -> bool:
 		return False
 	else:	
 		file_online_info = response.info()
-		num_bytes = int(file_online_info.get('content-length'))
-		num_megabytes = float(num_bytes / 1048576)	
 		type_file = file_online_info.get('content-type')
-		
+		num_bytes = int(file_online_info.get('content-length'))
+		num_kbytes = float(num_bytes / 1024)
+		num_megabytes = float(num_bytes / 1048576)	
+		num_gbytes = float(num_bytes / 1073741824)
+
+		if 1024 > num_bytes:
+			num_total_length = num_bytes
+			unid = 'B'
+		elif 1024 > num_kbytes:
+			num_total_length = num_kbytes
+			unid = 'KB'
+		elif 1024 > num_megabytes:
+			num_total_length = num_megabytes
+			unid = 'MB'
+		else:
+			num_total_length = num_gbytes
+			unid = 'GB'
+
 		if num_bytes and type_file:
-			print('{:.2f}MB | {}'.format(num_megabytes, type_file))
+			print('{:.2f}{} | {}'.format(num_total_length, unid, type_file))
 		print(f'Salvando em ... {output_file}')
 		urllib.request.urlretrieve(url, output_file, DowProgressBar())
 		return True
 
 #=====================================================#
-
-class SetUserConfig:
-
-	def __init__(self, kernel_type=platform.system()):
-		self.dir_home = Path.home()
-		self.kernel_type = kernel_type
-		if self.kernel_type == 'Linux':
-			self.dir_bin = os.path.abspath(os.path.join(self.dir_home, '.local', 'bin'))
-			self.dir_desktop_links = os.path.abspath(os.path.join(self.dir_home, '.local', 'share', 'applications'))
-			self.dir_cache = os.path.abspath(os.path.join(self.dir_home, '.cache', app_name))
-			self.dir_config = os.path.abspath(os.path.join(self.dir_home, '.config', app_name))
-			self.file_config = os.path.abspath(os.path.join(self.dir_config, f'{app_name}.conf'))
-		elif self.kernel_type == 'Windows':
-			self.dir_config = os.path.abspath(os.path.join(self.dir_home, 'AppData', 'Roaming', app_name))
-			self.dir_cache = os.path.abspath(os.path.join(self.dir_home, 'AppData', 'LocalLow', app_name))
-			self.file_config = os.path.abspath(os.path.join(self.dir_config, '{}.conf'.format(app_name)))
-			self.file_config = os.path.abspath(os.path.join(self.dir_config, f'{app_name}.conf'))	
-			self.dir_bin = os.path.abspath(os.path.join(self.dir_home, 'AppData', 'Local', 'Programs', app_name))	
-			self.dir_desktop_links = ''
-
-		self.file_temp = tempfile.NamedTemporaryFile(delete=True).name
-		# self.dir_temp = tempfile.TemporaryDirectory().name
-		if self.kernel_type == 'Linux':
-			self.dir_temp = os.path.abspath(os.path.join('/tmp', f'{app_name}-{getpass.getuser()}'))
-		elif self.kernel_type == 'Windows':
-			self.dir_temp = os.path.abspath(os.path.join('C:', f'{app_name}-{getpass.getuser()}'))
-
-		self.user_info = {
-			'home': self.dir_home,
-			'cache': self.dir_cache,
-			'config': self.dir_config,
-			'bin': self.dir_bin,
-			'desktop_links': self.dir_desktop_links,
-			'dir_temp': self.dir_temp,
-		}
-
-		for key in self.user_info:
-			d = self.user_info[key]
-			if os.path.isdir(d) == False:
-				mkdir(d)
-		
-	# Getter para kernel_type
-	@property
-	def kernel_type(self):
-		return self._kernel_type
-
-	# Setter para kernel_type
-	@kernel_type.setter
-	def kernel_type(self, kernel):
-		if isinstance(kernel, str):
-			if (kernel == 'Windows') or (kernel == 'Linux'):
-				self._kernel_type = kernel
-			else:
-				sefl._kernel_type = None
-		else:
-			self._kernel_type = None
-
-	
-	def get_user_info(self):
-		return self.user_info
-
-	def config_bashrc(self):
-		'''
-		Configurar o arquivo .bashrc do usuário para inserir o diretório ~/.local/bin
-		na variável de ambiente $PATH. Essa configuração será abortada caso ~/.local/bin já 
-		exista em ~/.bashrc.
-		'''
-		if self.kernel_type != 'Linux':
-			print(f'{CRed}Seu sistema não é Linux.{CReset}')
-			return False
-
-		# Verificar se ~/.local/bin já está no PATH do usuário atual.
-		user_local_path = os.environ['PATH']
-		if self.dir_bin in user_local_path:
-			return True
-
-		file_bashrc = os.path.abspath(os.path.join(self.dir_home, '.bashrc'))
-		file_bashrc_backup = os.path.abspath(os.path.join(self.dir_home, f'.bashrc.pre-{app_name}'))
-		if os.path.isfile(file_bashrc_backup) == False:
-			shutil.copyfile(file_bashrc, file_bashrc_backup)
-
-		content_bashrc = string_in_file('^export PATH=', file_bashrc)
-		if (content_bashrc != []) and (self.dir_bin in content_bashrc[0]):
-			return True
-
-		content_bashrc = read_file(file_bashrc)
-		RegExp = re.compile(r'^export PATH=')
-		num = 0
-		for line in content_bashrc:
-			if (RegExp.findall(line) != []):
-				line = f'# {line}'
-				content_bashrc[num] = line
-				print(line)
-			num += 1
-				
-		NewUserPath = f'export PATH={self.dir_bin}:{user_local_path}'
-		content_bashrc.append(NewUserPath)
-		os.remove(file_bashrc)
-		write_file(content_bashrc, file_bashrc)
-
-
-
 
 	
 

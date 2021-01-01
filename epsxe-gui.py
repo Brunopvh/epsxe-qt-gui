@@ -29,11 +29,13 @@ from PyQt5 import (
 '''
 
 
-__version__ = '2020-12-27'
+__version__ = '2020-12-31'
 
 dir_of_executable = os.path.dirname(os.path.realpath(__file__))
+dir_local_lib = os.path.abspath(os.path.join(dir_of_executable, 'lib'))
+sys.path.insert(0, dir_local_lib)
 os.chdir(dir_of_executable)
-from lib import utils
+from lib import utils, epsxe_config
 
 config = utils.SetUserConfig()
 if utils.KERNEL_TYPE == 'Windows':
@@ -103,6 +105,7 @@ class Window(QWidget):
 			self.download_epsxe()
 			return
 		elif self.option_installer.isChecked():
+			epsxe_config.teste()
 			self.text = 'Ação para instalar o programa.'
 			self.title_info = 'Instalar'
 		elif self.option_uninstall.isChecked():
